@@ -62,6 +62,7 @@ public class NodeJsonConfiguration extends GridJsonConfiguration {
     return config;
   }
 
+  private String hubProtocol;
   private String hubHost;
   private Integer hubPort;
   private String id;
@@ -78,7 +79,7 @@ public class NodeJsonConfiguration extends GridJsonConfiguration {
   private boolean enablePlatformVerification = true;
 
   public NodeJsonConfiguration() {}
-  
+
   public NodeJsonConfiguration(NodeJsonConfiguration nodeJsonConfig) {
 	  super(nodeJsonConfig);
 	  hubHost = nodeJsonConfig.hubHost;
@@ -100,6 +101,13 @@ public class NodeJsonConfiguration extends GridJsonConfiguration {
 
   // used to read a Selenium 2.x nodeConfig.json file and throw a friendly exception
   private Object configuration;
+
+  /**
+   * The protocol to access the hub. Defaults to {@code null}.
+   */
+  public String getHubProtocol() {
+    return hubProtocol;
+  }
 
   /**
    * The host name or IP of the hub. Defaults to {@code null}.

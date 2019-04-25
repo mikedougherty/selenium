@@ -94,12 +94,8 @@ public class SelfRegisteringRemote {
 
 
   public URL getRemoteURL() {
-    String host = registrationRequest.getConfiguration().host;
-    Integer port = registrationRequest.getConfiguration().port;
-    String url = "http://" + host + ":" + port;
-
     try {
-      return new URL(url);
+      return new URL(registrationRequest.getConfiguration().getRemoteHost());
     } catch (MalformedURLException e) {
       throw new GridConfigurationException("error building the node url " + e.getMessage(), e);
     }
@@ -251,10 +247,6 @@ public class SelfRegisteringRemote {
 
   private void registerToHub(boolean checkPresenceFirst) {
     if (!checkPresenceFirst || !isAlreadyRegistered(registrationRequest)) {
-      String tmp =
-          "http://" + registrationRequest.getConfiguration().getHubHost() + ":"
-          + registrationRequest.getConfiguration().getHubPort() + "/grid/register";
-
       // browserTimeout and timeout are always fetched from the hub. Nodes don't have default values.
       // If a node has browserTimeout or timeout configured, those will have precedence over the hub.
       LOG.fine(
@@ -292,15 +284,15 @@ public class SelfRegisteringRemote {
       }
 
       try {
-        URL registration = new URL(tmp);
-        LOG.info("Registering the node to the hub: " + registration);
+        URL registrationUrl = registrationRequest.getGridRegisterURL();
+        LOG.info("Registering the node to the hub: " + registrationUrl);
 
-        HttpRequest request = new HttpRequest(POST, registration.toExternalForm());
+        HttpRequest request = new HttpRequest(POST, registrationUrl.toExternalForm());
         updateConfigWithRealPort();
         String json = new Json().toJson(registrationRequest);
         request.setContent(json.getBytes(UTF_8));
 
-        HttpClient client = httpClientFactory.createClient(registration);
+        HttpClient client = httpClientFactory.createClient(registrationUrl);
         HttpResponse response = client.execute(request);
         if (response.getStatus() != 200) {
           throw new GridException(String.format("The hub responded with %s", response.getStatus()));
@@ -357,11 +349,7 @@ public class SelfRegisteringRemote {
    * @return json object of the current hub configuration
    */
   private GridHubConfiguration getHubConfiguration() throws Exception {
-    String hubApi =
-        "http://" + registrationRequest.getConfiguration().getHubHost() + ":"
-        + registrationRequest.getConfiguration().getHubPort() + "/grid/api/hub";
-
-    URL api = new URL(hubApi);
+    URL api = registrationRequest.getGridHubURL();
     HttpClient client = httpClientFactory.createClient(api);
     String url = api.toExternalForm();
     HttpRequest request = new HttpRequest(GET, url);
@@ -375,10 +363,7 @@ public class SelfRegisteringRemote {
 
   private boolean isAlreadyRegistered(RegistrationRequest node) {
     try {
-      String tmp =
-          "http://" + node.getConfiguration().getHubHost() + ":"
-          + node.getConfiguration().getHubPort() + "/grid/api/proxy";
-      URL api = new URL(tmp);
+      URL api = node.getGridProxyURL();
       HttpClient client = httpClientFactory.createClient(api);
 
       String id = node.getConfiguration().id;

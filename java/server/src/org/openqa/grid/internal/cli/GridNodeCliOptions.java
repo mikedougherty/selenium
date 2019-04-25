@@ -55,6 +55,15 @@ public class GridNodeCliOptions {
   private String remoteHost;
 
   /**
+   * The protocol to connect to the hub. Defaults to {@code null}.
+   */
+  @Parameter(
+      names = "-hubProtocol",
+      description = "<String> http or https: the protocol used to talk to the hub we're attempting to register with. If -hub is specified the -hubProtocol is determined from it."
+  )
+  private String hubProtocol;
+
+  /**
    * The host name or IP of the hub. Defaults to {@code null}.
    */
   @Parameter(
@@ -185,6 +194,10 @@ public class GridNodeCliOptions {
 
   public String getRemoteHost() {
     return remoteHost;
+  }
+
+  public String getHubProtocol() {
+    return hubProtocol;
   }
 
   public String getHubHost() {

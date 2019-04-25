@@ -51,23 +51,13 @@ public class GridNodeConfiguration extends GridConfiguration {
   @VisibleForTesting
   static final String ROLE = "node";
 
-  private static class HostPort {
-    final String host;
-    final int port;
-
-    HostPort(String host, int port) {
-      this.host = host;
-      this.port = port;
-    }
-  }
-  
   private static NodeJsonConfiguration getDefaultConfigFromJson() {
 	  synchronized(DEFAULT_CONFIG_FROM_JSON) {
 		  return new NodeJsonConfiguration(DEFAULT_CONFIG_FROM_JSON);
 	  }
   }
 
-  private HostPort hubHostPort;
+  private URL hubURL;
 
   /*
    * config parameters which do not serialize or de-serialize
@@ -95,6 +85,11 @@ public class GridNodeConfiguration extends GridConfiguration {
   /*
    * config parameters which serialize and deserialize to/from json
    */
+
+  /**
+   * The protocol to contact the hub. Defaults to {@code null}
+   */
+  public String hubProtocol;
 
   /**
    * The host name or IP of the hub. Defaults to {@code null}.
@@ -198,6 +193,7 @@ public class GridNodeConfiguration extends GridConfiguration {
       hub = jsonConfig.getHub();
 
     } else if (jsonConfig.getHubHost() != null && jsonConfig.getHubPort() != null) {
+      hubProtocol = ofNullable(jsonConfig.getHubProtocol()).orElse(defaultConfig.getHubProtocol());
       hubHost = ofNullable(jsonConfig.getHubHost()).orElse(defaultConfig.getHubHost());
       hubPort = ofNullable(jsonConfig.getHubPort()).orElse(defaultConfig.getHubPort());
 
@@ -223,37 +219,47 @@ public class GridNodeConfiguration extends GridConfiguration {
     ofNullable(cliConfig.getRemoteHost()).ifPresent(v -> remoteHost = v);
     if (cliConfig.getHub() != null) {
       hub = cliConfig.getHub();
-    } else if (cliConfig.getHubHost() != null || cliConfig.getHubPort() != null) {
-      HostPort defaultHubHostPort = getHubHostPort();
+    } else if (cliConfig.getHubProtocol() != null || cliConfig.getHubHost() != null || cliConfig.getHubPort() != null) {
+      URL defaultHubUrl = getHubURL();
       hub = null;
-      hubHost = ofNullable(cliConfig.getHubHost()).orElse(defaultHubHostPort.host);
-      hubPort = ofNullable(cliConfig.getHubPort()).orElse(defaultHubHostPort.port);
+      hubProtocol = ofNullable(cliConfig.getHubProtocol()).orElse(defaultHubUrl.getProtocol());
+      hubHost = ofNullable(cliConfig.getHubHost()).orElse(defaultHubUrl.getHost());
+      hubPort = ofNullable(cliConfig.getHubPort()).orElse(defaultHubUrl.getPort());
     }
+  }
+
+  public String getHubProtocol() {
+    return getHubURL().getHost();
   }
 
   public String getHubHost() {
-    return getHubHostPort().host;
+    return getHubURL().getHost();
   }
 
   public Integer getHubPort() {
-    return getHubHostPort().port;
+    return getHubURL().getPort();
   }
 
-  private HostPort getHubHostPort() {
-    // -hub has precedence
-    if (hub != null) {
+  private URL getHubURL() {
+    if (hubURL == null) {
       try {
-        URL u = new URL(hub);
-        hubHostPort = new HostPort(u.getHost(), u.getPort());
+        // -hub has precedence
+        if (hub != null) {
+          hubURL = new URL(hub);
+        } else if (hubProtocol != null || hubHost != null || hubPort != null) {
+          NodeJsonConfiguration defaultConfig = getDefaultConfigFromJson();
+          hubURL = new URL(
+            ofNullable(hubProtocol).orElse(defaultConfig.getHubProtocol()),
+            ofNullable(hubHost).orElse(defaultConfig.getHubHost()),
+            ofNullable(hubPort).orElse(defaultConfig.getHubPort()),
+            ""
+          );
+        }
       } catch (MalformedURLException mURLe) {
-        throw new RuntimeException("-hub must be a valid url: " + hub, mURLe);
+        throw new GridConfigurationException("-hub must be a valid url: " + hub, mURLe);
       }
-    } else if (hubHost != null || hubPort != null) {
-      NodeJsonConfiguration defaultConfig = getDefaultConfigFromJson();
-      hubHostPort = new HostPort(ofNullable(hubHost).orElse(defaultConfig.getHubHost()),
-                                 ofNullable(hubPort).orElse(defaultConfig.getHubPort()));
     }
-    return hubHostPort;
+    return hubURL;
   }
 
   public String getRemoteHost() {
@@ -264,9 +270,21 @@ public class GridNodeConfiguration extends GridConfiguration {
       if (port == null) {
         port = 5555;
       }
+
       remoteHost = "http://" + host + ":" + port;
     }
     return remoteHost;
+  }
+
+  /**
+   * Return java.net.URL version of remoteHost
+   */
+  public URL getRemoteURL() {
+    try {
+      return new URL(getRemoteHost());
+    } catch (MalformedURLException e) {
+      throw new GridConfigurationException(String.format("Error with remote host '%s': %s", getRemoteHost(), e.getMessage()), e);
+    }
   }
 
   public void merge(GridNodeConfiguration other) {
@@ -283,6 +301,9 @@ public class GridNodeConfiguration extends GridConfiguration {
     }
     if (isMergeAble(String.class, other.hub, hub)) {
       hub = other.hub;
+    }
+    if (isMergeAble(String.class, other.hubProtocol, hubProtocol)) {
+      hubProtocol = other.hubProtocol;
     }
     if (isMergeAble(String.class, other.hubHost, hubHost)) {
       hubHost = other.hubHost;
@@ -323,6 +344,7 @@ public class GridNodeConfiguration extends GridConfiguration {
     super.serializeFields(appendTo);
 
     appendTo.put("remoteHost", remoteHost);
+    appendTo.put("hubProtocol", hubProtocol);
     appendTo.put("hubHost", hubHost);
     appendTo.put("hubPort", hubPort);
     appendTo.put("id", id);
@@ -346,6 +368,7 @@ public class GridNodeConfiguration extends GridConfiguration {
     sb.append(toString(format, "downPollingLimit", downPollingLimit));
     sb.append(toString(format, "hub", hub));
     sb.append(toString(format, "id", id));
+    sb.append(toString(format, "hubProtocol", hubProtocol));
     sb.append(toString(format, "hubHost", hubHost));
     sb.append(toString(format, "hubPort", hubPort));
     sb.append(toString(format, "nodeConfigFile", nodeConfigFile));
@@ -372,11 +395,14 @@ public class GridNodeConfiguration extends GridConfiguration {
       GridNodeConfiguration result = new GridNodeConfiguration(); // defaults
       result.merge(fromJson);
       // copy non-mergeable fields
-      if (fromJson.getHubHostPort() != null) {
-        result.hub = String.format("http://%s:%s", fromJson.getHubHostPort(), fromJson.getHubPort());
+      if (fromJson.getHubURL() != null) {
+        result.hub = String.format("%s://%s:%s", fromJson.getHubProtocol(), fromJson.getHubHost(), fromJson.getHubPort());
       }
       if (fromJson.hub != null) {
         result.hub = fromJson.hub;
+      }
+      if (fromJson.hubProtocol != null) {
+        result.hubProtocol = fromJson.hubProtocol;
       }
       if (fromJson.hubHost != null) {
         result.hubHost = fromJson.hubHost;

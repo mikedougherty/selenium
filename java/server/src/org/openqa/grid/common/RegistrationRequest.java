@@ -22,6 +22,8 @@ import org.openqa.grid.internal.utils.configuration.GridNodeConfiguration;
 import org.openqa.selenium.json.Json;
 import org.openqa.selenium.json.JsonException;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -35,6 +37,10 @@ public class RegistrationRequest {
   // see enum SeleniumProtocol
   public static final String SELENIUM_PROTOCOL = "seleniumProtocol";
   public static final String PATH = "path";
+
+  public static final String GRID_HUB_PATH = "/grid/api/hub";
+  public static final String GRID_REGISTER_PATH = "/grid/register";
+  public static final String GRID_PROXY_PATH = "/grid/api/proxy";
 
   private String name;
   private String description;
@@ -215,6 +221,27 @@ public class RegistrationRequest {
     pendingRequest.configuration.dropCapabilitiesThatDoesNotMatchCurrentPlatform();
 
     return pendingRequest;
+  }
+
+  /**
+   * Return the URL that nodes GET hub configuration from.
+   */
+  public URL getGridHubURL() throws MalformedURLException {
+    return new URL(configuration.getRemoteURL(), GRID_HUB_PATH);
+  }
+
+  /**
+   * Return the URL that nodes should POST registration requests to.
+   */
+  public URL getGridRegisterURL() throws MalformedURLException {
+    return new URL(configuration.getRemoteURL(), GRID_REGISTER_PATH);
+  }
+
+  /**
+   * Return the URL that nodes use for proxy requests to the grid hub.
+   */
+  public URL getGridProxyURL() throws MalformedURLException {
+    return new URL(configuration.getRemoteURL(), GRID_PROXY_PATH);
   }
 
   /**
